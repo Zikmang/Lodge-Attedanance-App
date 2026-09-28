@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowRight, Users, Cloud } from 'lucide-react';
 import { Occupant, AttendanceMap, getAttendanceRecord } from '../types/attendance';
 import { formatDisplayDate, getGreeting, getTodayKey } from '../services/storage';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface Props {
   occupants: Occupant[];
@@ -113,6 +114,9 @@ export const MainMenuView: React.FC<Props> = ({
             </div>
           </div>
         </div>
+
+        {/* PWA Install Prompt Card (suppresses itself if already running as standalone app) */}
+        <PWAInstallButton variant="card" />
 
         {/* Subtle setup hint if Google Sheet is not yet connected */}
         {!hasApi && (

@@ -42,38 +42,49 @@ export function buildAttendanceReportText(
     }
   });
 
-  const formatList = (list: string[]) => {
-    if (list.length === 0) return 'None';
-    return list.map((name) => `- ${name}`).join('\n');
-  };
+  const sections: string[] = [];
 
-  const formatExcuseList = (list: { name: string; reason?: string }[]) => {
-    if (list.length === 0) return 'None';
-    return list
+  // PRESENT: If 1+ people Present
+  if (presentList.length > 0) {
+    const items = presentList.map((n) => `- ${n}`).join('\n');
+    sections.push(`PRESENT\n${items}`);
+  }
+
+  // ABSENT: If 1+ people Absent without excuse
+  if (absentList.length > 0) {
+    const items = absentList.map((n) => `- ${n}`).join('\n');
+    sections.push(`ABSENT\n${items}`);
+  }
+
+  // EXCUSE: If 1+ people Absent with excuse
+  if (excuseList.length > 0) {
+    const items = excuseList
       .map((item) => {
         const reasonText = item.reason && item.reason.trim() ? ` — ${item.reason.trim()}` : '';
         return `- ${item.name}${reasonText}`;
       })
       .join('\n');
-  };
+    sections.push(`EXCUSE\n${items}`);
+  }
 
-  return `LODGE ATTENDANCE
-${displayDate}
+  // PASS: If 1+ people on Pass
+  if (passList.length > 0) {
+    const items = passList.map((n) => `- ${n}`).join('\n');
+    sections.push(`PASS\n${items}`);
+  }
 
-PRESENT
-${formatList(presentList)}
+  // DUTY: If 1+ people on Duty
+  if (dutyList.length > 0) {
+    const items = dutyList.map((n) => `- ${n}`).join('\n');
+    sections.push(`DUTY\n${items}`);
+  }
 
-ABSENT
-${formatList(absentList)}
+  const header = `LODGE ATTENDANCE\n${displayDate}`;
+  if (sections.length === 0) {
+    return `${header}\n\nNo attendance recorded`;
+  }
 
-EXCUSE
-${formatExcuseList(excuseList)}
-
-PASS
-${formatList(passList)}
-
-DUTY
-${formatList(dutyList)}`;
+  return `${header}\n\n${sections.join('\n\n')}`;
 }
 
 export const ReportModal: React.FC<Props> = ({
@@ -219,15 +230,23 @@ export const ReportModal: React.FC<Props> = ({
 
           {/* Grouped lists */}
           <div className="space-y-5 text-sm">
+            {presentList.length === 0 &&
+              absentList.length === 0 &&
+              excuseList.length === 0 &&
+              passList.length === 0 &&
+              dutyList.length === 0 && (
+                <div className="p-6 text-center text-xs text-[#86868B] bg-[#F8F8FA] rounded-2xl">
+                  No attendance records for this date
+                </div>
+              )}
+
             {/* Present section */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#2D7D46] flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#2D7D46]" />
-                Present ({presentList.length})
-              </h3>
-              {presentList.length === 0 ? (
-                <p className="text-xs text-[#86868B] italic pl-3">None</p>
-              ) : (
+            {presentList.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#2D7D46] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2D7D46]" />
+                  Present ({presentList.length})
+                </h3>
                 <ol className="divide-y divide-[#E5E5EA]/50 bg-[#F8F8FA] rounded-xl px-3 py-1 text-[#1D1D1F]">
                   {presentList.map((name, i) => (
                     <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center gap-2">
@@ -236,18 +255,16 @@ export const ReportModal: React.FC<Props> = ({
                     </li>
                   ))}
                 </ol>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Absent section */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#C24138] flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#C24138]" />
-                Absent ({absentList.length})
-              </h3>
-              {absentList.length === 0 ? (
-                <p className="text-xs text-[#86868B] italic pl-3">None</p>
-              ) : (
+            {absentList.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#C24138] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C24138]" />
+                  Absent ({absentList.length})
+                </h3>
                 <ol className="divide-y divide-[#E5E5EA]/50 bg-[#F8F8FA] rounded-xl px-3 py-1 text-[#1D1D1F]">
                   {absentList.map((name, i) => (
                     <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center gap-2">
@@ -256,18 +273,16 @@ export const ReportModal: React.FC<Props> = ({
                     </li>
                   ))}
                 </ol>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Excuse section */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#2563EB] flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
-                Excuse ({excuseList.length})
-              </h3>
-              {excuseList.length === 0 ? (
-                <p className="text-xs text-[#86868B] italic pl-3">None</p>
-              ) : (
+            {excuseList.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#2563EB] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                  Excuse ({excuseList.length})
+                </h3>
                 <ol className="divide-y divide-[#E5E5EA]/50 bg-[#F8F8FA] rounded-xl px-3 py-1 text-[#1D1D1F]">
                   {excuseList.map((item, i) => (
                     <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center justify-between gap-2">
@@ -283,18 +298,16 @@ export const ReportModal: React.FC<Props> = ({
                     </li>
                   ))}
                 </ol>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Pass section */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#B46800] flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#B46800]" />
-                Pass ({passList.length})
-              </h3>
-              {passList.length === 0 ? (
-                <p className="text-xs text-[#86868B] italic pl-3">None</p>
-              ) : (
+            {passList.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#B46800] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#B46800]" />
+                  Pass ({passList.length})
+                </h3>
                 <ol className="divide-y divide-[#E5E5EA]/50 bg-[#F8F8FA] rounded-xl px-3 py-1 text-[#1D1D1F]">
                   {passList.map((name, i) => (
                     <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center gap-2">
@@ -303,18 +316,16 @@ export const ReportModal: React.FC<Props> = ({
                     </li>
                   ))}
                 </ol>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Duty section */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#2563EB] flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
-                Duty ({dutyList.length})
-              </h3>
-              {dutyList.length === 0 ? (
-                <p className="text-xs text-[#86868B] italic pl-3">None</p>
-              ) : (
+            {dutyList.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#2563EB] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                  Duty ({dutyList.length})
+                </h3>
                 <ol className="divide-y divide-[#E5E5EA]/50 bg-[#F8F8FA] rounded-xl px-3 py-1 text-[#1D1D1F]">
                   {dutyList.map((name, i) => (
                     <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center gap-2">
@@ -323,8 +334,8 @@ export const ReportModal: React.FC<Props> = ({
                     </li>
                   ))}
                 </ol>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

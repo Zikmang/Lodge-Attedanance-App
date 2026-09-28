@@ -22,8 +22,13 @@ import {
   getTodayKey,
   getWebAppUrl,
   saveWebAppUrl,
+  enqueuePendingSync,
+  getPendingSyncQueue,
+  removePendingSyncItem,
+  getPendingSyncCount,
 } from './services/storage';
-import { Header } from './components/Header';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
+import { Header, SyncState } from './components/Header';
 import { MainMenuView } from './components/MainMenuView';
 import { AttendanceView } from './components/AttendanceView';
 import { ManageOccupantsView } from './components/ManageOccupantsView';
@@ -37,13 +42,18 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('MENU');
   const [webAppUrl, setWebAppUrlState] = useState<string | null>(() => getWebAppUrl());
 
+  const isOnline = useOnlineStatus();
+  const [pendingCount, setPendingCount] = useState<number>(() => getPendingSyncCount());
+  const [syncState, setSyncState] = useState<SyncState>(() => (!navigator.onLine ? 'offline' : 'online'));
+  const syncStateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isFlushingQueueRef = useRef(false);
+
   // Occupants & Attendance
   const [occupants, setOccupants] = useState<Occupant[]>(() => getCachedOccupants());
   const [attendance, setAttendance] = useState<AttendanceMap>(() =>
     getCachedAttendance(getTodayKey())
   );
 
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -62,16 +72,80 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
+  // Flush pending offline changes to Google Sheets
+  const flushPendingQueue = useCallback(
+    async (urlToUse?: string) => {
+      const targetUrl = urlToUse || webAppUrl;
+      if (!targetUrl || !navigator.onLine || isFlushingQueueRef.current) return;
+
+      const queue = getPendingSyncQueue();
+      if (queue.length === 0) return;
+
+      isFlushingQueueRef.current = true;
+      setSyncState('syncing');
+
+      let successCount = 0;
+      for (const item of queue) {
+        try {
+          await apiSetAttendance(
+            targetUrl,
+            item.date,
+            item.occupantName,
+            item.status,
+            item.excuseStatus,
+            item.excuseReason
+          );
+          removePendingSyncItem(item.id);
+          successCount++;
+        } catch (err) {
+          console.warn('Could not sync pending item for', item.occupantName, err);
+          break;
+        }
+      }
+
+      const remaining = getPendingSyncCount();
+      setPendingCount(remaining);
+      isFlushingQueueRef.current = false;
+
+      if (remaining === 0 && successCount > 0) {
+        setSyncState('synced');
+        if (syncStateTimerRef.current) clearTimeout(syncStateTimerRef.current);
+        syncStateTimerRef.current = setTimeout(() => {
+          setSyncState('online');
+        }, 2500);
+        showToast('Offline changes synced with Google Sheet');
+      } else if (!navigator.onLine) {
+        setSyncState('offline');
+      } else {
+        setSyncState('online');
+      }
+    },
+    [webAppUrl, showToast]
+  );
+
   // Synchronize from Google Sheets (Active occupants + Today's attendance)
   const syncFromSheet = useCallback(
     async (urlToUse?: string, showSuccessToast = false) => {
       const targetUrl = urlToUse || webAppUrl;
       if (!targetUrl) return;
 
-      setIsSyncing(true);
+      if (!navigator.onLine) {
+        setSyncState('offline');
+        if (showSuccessToast) {
+          showToast('Offline — changes will sync when connected');
+        }
+        return;
+      }
+
+      setSyncState('syncing');
       const todayKey = getTodayKey();
 
       try {
+        // First flush any pending offline items
+        if (getPendingSyncCount() > 0) {
+          await flushPendingQueue(targetUrl);
+        }
+
         // Parallel fetch for speed
         const [sheetOccupants, sheetAttendance] = await Promise.all([
           apiFetchOccupants(targetUrl),
@@ -84,36 +158,70 @@ export default function App() {
         }
 
         if (sheetAttendance && typeof sheetAttendance === 'object') {
-          setAttendance(sheetAttendance);
-          saveCachedAttendance(todayKey, sheetAttendance);
+          // Merge with any locally pending items for today so local changes aren't wiped
+          const pending = getPendingSyncQueue();
+          const mergedAttendance = { ...sheetAttendance };
+          pending.forEach((item) => {
+            if (item.date === todayKey) {
+              const record: AttendanceRecord = {
+                status: item.status,
+                excuseStatus: item.excuseStatus,
+                excuseReason: item.excuseReason,
+              };
+              mergedAttendance[item.occupantName] = record;
+            }
+          });
+
+          setAttendance(mergedAttendance);
+          saveCachedAttendance(todayKey, mergedAttendance);
         }
 
+        setSyncState('synced');
+        if (syncStateTimerRef.current) clearTimeout(syncStateTimerRef.current);
+        syncStateTimerRef.current = setTimeout(() => {
+          setSyncState('online');
+        }, 2500);
+
         if (showSuccessToast) {
-          showToast('Updated from Google Sheet');
+          showToast('Synced with Google Sheet');
         }
       } catch (err: any) {
         console.error('Failed to sync from Google Sheet:', err);
+        if (!navigator.onLine) {
+          setSyncState('offline');
+        } else {
+          setSyncState('online');
+        }
         if (showSuccessToast) {
           showToast('Failed to sync: ' + (err.message || 'Check connection'));
         }
-      } finally {
-        setIsSyncing(false);
       }
     },
-    [webAppUrl, showToast]
+    [webAppUrl, showToast, flushPendingQueue]
   );
 
-  // Initial load when app opens
+  // Connectivity listener: flush queue and sync when online
   useEffect(() => {
-    if (webAppUrl) {
-      syncFromSheet(webAppUrl);
+    if (isOnline) {
+      if (webAppUrl) {
+        if (getPendingSyncCount() > 0) {
+          flushPendingQueue(webAppUrl);
+        } else {
+          setSyncState('online');
+          syncFromSheet(webAppUrl);
+        }
+      } else {
+        setSyncState('online');
+      }
+    } else {
+      setSyncState('offline');
     }
-  }, [webAppUrl, syncFromSheet]);
+  }, [isOnline, webAppUrl, flushPendingQueue, syncFromSheet]);
 
   // Auto-refresh when user returns to app/tab
   useEffect(() => {
     const handleFocus = () => {
-      if (webAppUrl) {
+      if (webAppUrl && navigator.onLine) {
         syncFromSheet(webAppUrl);
       }
     };
@@ -142,31 +250,63 @@ export default function App() {
         excuseReason: cleanExcuseReason,
       };
 
-      // Optimistically update local state & cache
+      // 1. Immediately update local state & fast cache (optimistic / offline-first)
       setAttendance((prev) => {
         const next = { ...prev, [occupantKey]: record, [occupant.id]: record };
         saveCachedAttendance(todayKey, next);
         return next;
       });
 
-      // Send to Google Sheets if connected
-      if (webAppUrl) {
-        try {
-          await apiSetAttendance(
-            webAppUrl,
-            todayKey,
-            occupant.name,
-            status,
-            cleanExcuseStatus,
-            cleanExcuseReason
-          );
-        } catch (err: any) {
-          console.error('Failed to save attendance to Google Sheet:', err);
-          showToast('Failed to save to Google Sheet');
+      // 2. If disconnected or no Web App URL configured, queue locally
+      if (!navigator.onLine || !webAppUrl) {
+        enqueuePendingSync({
+          date: todayKey,
+          occupantName: occupant.name,
+          status,
+          excuseStatus: cleanExcuseStatus,
+          excuseReason: cleanExcuseReason,
+        });
+        setPendingCount(getPendingSyncCount());
+        setSyncState('offline');
+        return;
+      }
+
+      // 3. Online with backend: send to Google Sheet
+      setSyncState('syncing');
+      try {
+        await apiSetAttendance(
+          webAppUrl,
+          todayKey,
+          occupant.name,
+          status,
+          cleanExcuseStatus,
+          cleanExcuseReason
+        );
+        removePendingSyncItem(`${todayKey}:${occupant.name}`);
+        setPendingCount(getPendingSyncCount());
+        setSyncState('synced');
+        if (syncStateTimerRef.current) clearTimeout(syncStateTimerRef.current);
+        syncStateTimerRef.current = setTimeout(() => {
+          setSyncState('online');
+        }, 2000);
+      } catch (err: any) {
+        console.warn('Network issue saving attendance, enqueuing for offline sync:', err);
+        enqueuePendingSync({
+          date: todayKey,
+          occupantName: occupant.name,
+          status,
+          excuseStatus: cleanExcuseStatus,
+          excuseReason: cleanExcuseReason,
+        });
+        setPendingCount(getPendingSyncCount());
+        if (!navigator.onLine) {
+          setSyncState('offline');
+        } else {
+          setSyncState('online');
         }
       }
     },
-    [webAppUrl, showToast]
+    [webAppUrl]
   );
 
   // Set all to Present
@@ -188,15 +328,55 @@ export default function App() {
     saveCachedAttendance(todayKey, resetMap);
     showToast('All set to Present');
 
-    if (webAppUrl) {
-      try {
-        // Send updates to Google Sheet
-        const promises = occupants.map((o) =>
-          apiSetAttendance(webAppUrl, todayKey, o.name, 'PRESENT', 'none', '')
-        );
-        await Promise.all(promises);
-      } catch (err: any) {
-        console.error('Failed to update all in Google Sheet:', err);
+    if (!webAppUrl || !navigator.onLine) {
+      occupants.forEach((o) => {
+        enqueuePendingSync({
+          date: todayKey,
+          occupantName: o.name,
+          status: 'PRESENT',
+          excuseStatus: 'none',
+          excuseReason: '',
+        });
+      });
+      setPendingCount(getPendingSyncCount());
+      if (!navigator.onLine) {
+        setSyncState('offline');
+      }
+      return;
+    }
+
+    setSyncState('syncing');
+    try {
+      const promises = occupants.map((o) =>
+        apiSetAttendance(webAppUrl, todayKey, o.name, 'PRESENT', 'none', '')
+      );
+      await Promise.all(promises);
+
+      occupants.forEach((o) => {
+        removePendingSyncItem(`${todayKey}:${o.name}`);
+      });
+      setPendingCount(getPendingSyncCount());
+      setSyncState('synced');
+      if (syncStateTimerRef.current) clearTimeout(syncStateTimerRef.current);
+      syncStateTimerRef.current = setTimeout(() => {
+        setSyncState('online');
+      }, 2500);
+    } catch (err: any) {
+      console.warn('Failed to update all online, queued for sync:', err);
+      occupants.forEach((o) => {
+        enqueuePendingSync({
+          date: todayKey,
+          occupantName: o.name,
+          status: 'PRESENT',
+          excuseStatus: 'none',
+          excuseReason: '',
+        });
+      });
+      setPendingCount(getPendingSyncCount());
+      if (!navigator.onLine) {
+        setSyncState('offline');
+      } else {
+        setSyncState('online');
       }
     }
   }, [occupants, webAppUrl, showToast]);
@@ -274,7 +454,9 @@ export default function App() {
       {/* Calm Apple HIG Header */}
       <Header
         hasApi={Boolean(webAppUrl)}
-        isSyncing={isSyncing}
+        isOnline={isOnline}
+        syncState={syncState}
+        pendingCount={pendingCount}
         onRefresh={() => syncFromSheet(undefined, true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
@@ -296,7 +478,7 @@ export default function App() {
           <AttendanceView
             occupants={occupants}
             attendance={attendance}
-            isSyncing={isSyncing}
+            isSyncing={syncState === 'syncing'}
             onUpdateStatus={handleUpdateStatus}
             onResetAllPresent={handleResetAllPresent}
             onGenerateReport={() => setIsReportOpen(true)}
@@ -309,7 +491,7 @@ export default function App() {
           <ManageOccupantsView
             occupants={occupants}
             hasApi={Boolean(webAppUrl)}
-            isSyncing={isSyncing}
+            isSyncing={syncState === 'syncing'}
             onAddOccupant={handleAddOccupant}
             onEditOccupant={handleEditOccupant}
             onRemoveOccupant={handleRemoveOccupant}

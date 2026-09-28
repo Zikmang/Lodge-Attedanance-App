@@ -1,8 +1,19 @@
-import { Occupant, AttendanceMap, INITIAL_OCCUPANTS } from '../types/attendance';
+import { Occupant, AttendanceMap, INITIAL_OCCUPANTS, AttendanceStatus, ExcuseStatus } from '../types/attendance';
 
 const OCCUPANTS_CACHE_KEY = 'corpers_lodge_occupants_cache_v2';
 const ATTENDANCE_CACHE_PREFIX = 'corpers_lodge_att_cache_v2_';
 const APPS_SCRIPT_URL_KEY = 'corpers_lodge_apps_script_url_v2';
+const SYNC_QUEUE_KEY = 'corpers_lodge_sync_queue_v1';
+
+export interface PendingSyncItem {
+  id: string; // `${date}:${occupantName}`
+  date: string;
+  occupantName: string;
+  status: AttendanceStatus;
+  excuseStatus: ExcuseStatus;
+  excuseReason: string;
+  timestamp: number;
+}
 
 export function getTodayKey(): string {
   const d = new Date();
@@ -151,3 +162,78 @@ export function saveCachedAttendance(dateKey: string, map: AttendanceMap): void 
   }
 }
 const ATTENDANCE_PREFIX = ATTENDANCE_CACHE_PREFIX;
+
+/**
+ * Offline Sync Queue Management.
+ * Deduplicates by `${date}:${occupantName}` and preserves the latest valid state.
+ */
+export function getPendingSyncQueue(): PendingSyncItem[] {
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Error reading sync queue', err);
+  }
+  return [];
+}
+
+export function savePendingSyncQueue(queue: PendingSyncItem[]): void {
+  try {
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+  } catch (err) {
+    console.error('Error saving sync queue', err);
+  }
+}
+
+export function enqueuePendingSync(item: {
+  date: string;
+  occupantName: string;
+  status: AttendanceStatus;
+  excuseStatus: ExcuseStatus;
+  excuseReason: string;
+}): void {
+  const queue = getPendingSyncQueue();
+  const id = `${item.date}:${item.occupantName}`;
+  const existingIndex = queue.findIndex((q) => q.id === id);
+
+  const newItem: PendingSyncItem = {
+    id,
+    date: item.date,
+    occupantName: item.occupantName,
+    status: item.status,
+    excuseStatus: item.excuseStatus,
+    excuseReason: item.excuseReason,
+    timestamp: Date.now(),
+  };
+
+  if (existingIndex >= 0) {
+    queue[existingIndex] = newItem;
+  } else {
+    queue.push(newItem);
+  }
+
+  savePendingSyncQueue(queue);
+}
+
+export function removePendingSyncItem(id: string): void {
+  const queue = getPendingSyncQueue();
+  const filtered = queue.filter((q) => q.id !== id);
+  savePendingSyncQueue(filtered);
+}
+
+export function clearPendingSyncQueue(): void {
+  try {
+    localStorage.removeItem(SYNC_QUEUE_KEY);
+  } catch (err) {
+    console.error('Error clearing sync queue', err);
+  }
+}
+
+export function getPendingSyncCount(): number {
+  return getPendingSyncQueue().length;
+}
