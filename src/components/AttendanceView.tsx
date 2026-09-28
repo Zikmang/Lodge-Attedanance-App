@@ -1,13 +1,18 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { ChevronLeft, Search, RotateCcw, FileText, RefreshCw } from 'lucide-react';
-import { Occupant, AttendanceMap, AttendanceStatus } from '../types/attendance';
+import { Occupant, AttendanceMap, AttendanceStatus, ExcuseStatus, getAttendanceRecord } from '../types/attendance';
 import { formatDateSimple, getTodayKey } from '../services/storage';
 
 interface Props {
   occupants: Occupant[];
   attendance: AttendanceMap;
   isSyncing: boolean;
-  onUpdateStatus: (occupant: Occupant, status: AttendanceStatus) => void;
+  onUpdateStatus: (
+    occupant: Occupant,
+    status: AttendanceStatus,
+    excuseStatus?: ExcuseStatus,
+    excuseReason?: string
+  ) => void;
   onResetAllPresent: () => void;
   onGenerateReport: () => void;
   onRefresh: () => void;
@@ -25,6 +30,9 @@ export const AttendanceView: React.FC<Props> = ({
   onBackToMenu,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [reasonInputs, setReasonInputs] = useState<Record<string, string>>({});
+  const reasonDebounceRef = useRef<Record<string, NodeJS.Timeout>>({});
+
   const dateKey = getTodayKey();
   const simpleDate = formatDateSimple(dateKey);
 
@@ -41,13 +49,25 @@ export const AttendanceView: React.FC<Props> = ({
     let absent = 0;
     let pass = 0;
     let duty = 0;
+    let excused = 0;
+    let unexcused = 0;
 
     occupants.forEach((o) => {
-      const status = attendance[o.name] || attendance[o.id] || 'PRESENT';
-      if (status === 'PRESENT') present++;
-      else if (status === 'ABSENT') absent++;
-      else if (status === 'PASS') pass++;
-      else if (status === 'DUTY') duty++;
+      const record = getAttendanceRecord(attendance[o.name] || attendance[o.id]);
+      if (record.status === 'PRESENT') {
+        present++;
+      } else if (record.status === 'ABSENT') {
+        absent++;
+        if (record.excuseStatus === 'provided') {
+          excused++;
+        } else {
+          unexcused++;
+        }
+      } else if (record.status === 'PASS') {
+        pass++;
+      } else if (record.status === 'DUTY') {
+        duty++;
+      }
     });
 
     return {
@@ -55,9 +75,68 @@ export const AttendanceView: React.FC<Props> = ({
       absent,
       pass,
       duty,
+      excused,
+      unexcused,
       total: occupants.length,
     };
   }, [occupants, attendance]);
+
+  const handleStatusClick = (occupant: Occupant, newStatus: AttendanceStatus) => {
+    // If selecting ABSENT and occupant wasn't already absent, default excuse is "none"
+    if (newStatus === 'ABSENT') {
+      const currentRecord = getAttendanceRecord(attendance[occupant.name] || attendance[occupant.id]);
+      if (currentRecord.status === 'ABSENT') {
+        // Keep existing excuse if already absent
+        return;
+      }
+      onUpdateStatus(occupant, 'ABSENT', 'none', '');
+    } else {
+      // For Present, Pass, Duty: clear excuse state immediately
+      setReasonInputs((prev) => {
+        const next = { ...prev };
+        delete next[occupant.name];
+        return next;
+      });
+      onUpdateStatus(occupant, newStatus, 'none', '');
+    }
+  };
+
+  const handleExcuseToggle = (occupant: Occupant, newExcuseStatus: ExcuseStatus) => {
+    if (newExcuseStatus === 'none') {
+      // Clear excuse reason when changing back to "Without excuse"
+      setReasonInputs((prev) => {
+        const next = { ...prev };
+        delete next[occupant.name];
+        return next;
+      });
+      onUpdateStatus(occupant, 'ABSENT', 'none', '');
+    } else {
+      const currentReason = reasonInputs[occupant.name] ?? '';
+      onUpdateStatus(occupant, 'ABSENT', 'provided', currentReason);
+    }
+  };
+
+  const handleReasonChange = (occupant: Occupant, newReason: string) => {
+    setReasonInputs((prev) => ({ ...prev, [occupant.name]: newReason }));
+
+    if (reasonDebounceRef.current[occupant.name]) {
+      clearTimeout(reasonDebounceRef.current[occupant.name]);
+    }
+
+    reasonDebounceRef.current[occupant.name] = setTimeout(() => {
+      onUpdateStatus(occupant, 'ABSENT', 'provided', newReason);
+    }, 500);
+  };
+
+  const handleReasonBlur = (occupant: Occupant) => {
+    if (reasonDebounceRef.current[occupant.name]) {
+      clearTimeout(reasonDebounceRef.current[occupant.name]);
+    }
+    const val = reasonInputs[occupant.name];
+    if (val !== undefined) {
+      onUpdateStatus(occupant, 'ABSENT', 'provided', val);
+    }
+  };
 
   return (
     <div className="max-w-xl mx-auto w-full px-5 pt-4 pb-28 min-h-[calc(100vh-56px)] flex flex-col">
@@ -113,10 +192,17 @@ export const AttendanceView: React.FC<Props> = ({
 
         <span className="text-[#E5E5EA]">|</span>
 
-        <div className="flex items-center gap-1 sm:gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-[#C24138]" />
-          <span className="font-semibold text-[#1D1D1F]">{totals.absent}</span>
-          <span className="text-[#86868B] font-normal">Absent</span>
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#C24138]" />
+            <span className="font-semibold text-[#1D1D1F]">{totals.absent}</span>
+            <span className="text-[#86868B] font-normal">Absent</span>
+          </div>
+          {totals.absent > 0 && (
+            <span className="text-[10px] text-[#86868B] font-normal tracking-tight mt-0.5">
+              ({totals.excused} excused, {totals.unexcused} no excuse)
+            </span>
+          )}
         </div>
 
         <span className="text-[#E5E5EA]">|</span>
@@ -167,75 +253,147 @@ export const AttendanceView: React.FC<Props> = ({
           </div>
         ) : (
           filteredOccupants.map((occupant) => {
-            const currentStatus =
-              attendance[occupant.name] || attendance[occupant.id] || 'PRESENT';
+            const record = getAttendanceRecord(
+              attendance[occupant.name] || attendance[occupant.id]
+            );
+            const currentStatus = record.status;
+            const currentReasonValue =
+              reasonInputs[occupant.name] !== undefined
+                ? reasonInputs[occupant.name]
+                : record.excuseReason || '';
 
             return (
               <div
                 key={occupant.id || occupant.name}
-                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+                className="p-4 flex flex-col gap-3 transition-colors"
               >
-                {/* Person's Name: Visually dominant */}
-                <div className="min-w-0 pr-2">
-                  <span className="text-base font-medium text-[#1D1D1F] truncate block">
-                    {occupant.name}
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  {/* Person's Name: Visually dominant */}
+                  <div className="min-w-0 pr-2">
+                    <span className="text-base font-medium text-[#1D1D1F] truncate block">
+                      {occupant.name}
+                    </span>
+                  </div>
+
+                  {/* Elegant Compact Segmented Control: Present | Absent | Pass | Duty */}
+                  <div
+                    className="bg-[#EBEBEF] p-0.5 rounded-xl grid grid-cols-4 sm:flex items-center shrink-0 w-full sm:w-auto"
+                    role="group"
+                    aria-label={`Attendance status for ${occupant.name}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleStatusClick(occupant, 'PRESENT')}
+                      className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
+                        currentStatus === 'PRESENT'
+                          ? 'bg-white text-[#2D7D46] font-semibold shadow-2xs'
+                          : 'text-[#636366] hover:text-[#1D1D1F]'
+                      }`}
+                    >
+                      Present
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleStatusClick(occupant, 'ABSENT')}
+                      className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
+                        currentStatus === 'ABSENT'
+                          ? 'bg-white text-[#C24138] font-semibold shadow-2xs'
+                          : 'text-[#636366] hover:text-[#1D1D1F]'
+                      }`}
+                    >
+                      Absent
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleStatusClick(occupant, 'PASS')}
+                      className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
+                        currentStatus === 'PASS'
+                          ? 'bg-white text-[#B46800] font-semibold shadow-2xs'
+                          : 'text-[#636366] hover:text-[#1D1D1F]'
+                      }`}
+                    >
+                      Pass
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleStatusClick(occupant, 'DUTY')}
+                      className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
+                        currentStatus === 'DUTY'
+                          ? 'bg-white text-[#2563EB] font-semibold shadow-2xs'
+                          : 'text-[#636366] hover:text-[#1D1D1F]'
+                      }`}
+                    >
+                      Duty
+                    </button>
+                  </div>
                 </div>
 
-                {/* Elegant Compact Segmented Control: Present | Absent | Pass | Duty */}
-                <div
-                  className="bg-[#EBEBEF] p-0.5 rounded-xl grid grid-cols-4 sm:flex items-center shrink-0 w-full sm:w-auto"
-                  role="group"
-                  aria-label={`Attendance status for ${occupant.name}`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onUpdateStatus(occupant, 'PRESENT')}
-                    className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
-                      currentStatus === 'PRESENT'
-                        ? 'bg-white text-[#2D7D46] font-semibold shadow-2xs'
-                        : 'text-[#636366] hover:text-[#1D1D1F]'
-                    }`}
-                  >
-                    Present
-                  </button>
+                {/* Excuse Controls: Only revealed when status = ABSENT */}
+                {currentStatus === 'ABSENT' && (
+                  <div className="mt-1 pt-3 border-t border-[#E5E5EA]/70 flex flex-col gap-2.5 animate-in fade-in duration-150">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-[#86868B]">
+                        Excuse
+                      </span>
 
-                  <button
-                    type="button"
-                    onClick={() => onUpdateStatus(occupant, 'ABSENT')}
-                    className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
-                      currentStatus === 'ABSENT'
-                        ? 'bg-white text-[#C24138] font-semibold shadow-2xs'
-                        : 'text-[#636366] hover:text-[#1D1D1F]'
-                    }`}
-                  >
-                    Absent
-                  </button>
+                      {/* Segmented control: Without excuse | With excuse */}
+                      <div
+                        className="bg-[#EBEBEF] p-0.5 rounded-lg inline-flex items-center self-start sm:self-auto"
+                        role="group"
+                        aria-label={`Excuse status for ${occupant.name}`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleExcuseToggle(occupant, 'none')}
+                          className={`px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all cursor-pointer ${
+                            record.excuseStatus === 'none'
+                              ? 'bg-white text-[#1D1D1F] font-semibold shadow-2xs'
+                              : 'text-[#636366] hover:text-[#1D1D1F]'
+                          }`}
+                        >
+                          Without excuse
+                        </button>
 
-                  <button
-                    type="button"
-                    onClick={() => onUpdateStatus(occupant, 'PASS')}
-                    className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
-                      currentStatus === 'PASS'
-                        ? 'bg-white text-[#B46800] font-semibold shadow-2xs'
-                        : 'text-[#636366] hover:text-[#1D1D1F]'
-                    }`}
-                  >
-                    Pass
-                  </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExcuseToggle(occupant, 'provided')}
+                          className={`px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all cursor-pointer ${
+                            record.excuseStatus === 'provided'
+                              ? 'bg-white text-[#2563EB] font-semibold shadow-2xs'
+                              : 'text-[#636366] hover:text-[#1D1D1F]'
+                          }`}
+                        >
+                          With excuse
+                        </button>
+                      </div>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onUpdateStatus(occupant, 'DUTY')}
-                    className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
-                      currentStatus === 'DUTY'
-                        ? 'bg-white text-[#2563EB] font-semibold shadow-2xs'
-                        : 'text-[#636366] hover:text-[#1D1D1F]'
-                    }`}
-                  >
-                    Duty
-                  </button>
-                </div>
+                    {/* If "With excuse" is selected, reveal Reason for excuse */}
+                    {record.excuseStatus === 'provided' && (
+                      <div className="flex flex-col gap-1 pt-0.5 animate-in fade-in duration-150">
+                        <label className="text-[11px] font-medium text-[#86868B]">
+                          Reason for excuse
+                        </label>
+                        <input
+                          type="text"
+                          value={currentReasonValue}
+                          onChange={(e) => handleReasonChange(occupant, e.target.value)}
+                          onBlur={() => handleReasonBlur(occupant)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                          placeholder="Enter reason (e.g. Medical appointment, Travel)"
+                          className="w-full px-3 py-1.5 bg-[#F8F8FA] focus:bg-white text-xs text-[#1D1D1F] placeholder:text-[#86868B] rounded-xl border border-[#E5E5EA] focus:border-[#1D1D1F] focus:outline-none transition-all"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })

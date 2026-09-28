@@ -1,4 +1,4 @@
-import { Occupant, AttendanceMap, AttendanceStatus } from '../types/attendance';
+import { Occupant, AttendanceMap, AttendanceStatus, ExcuseStatus } from '../types/attendance';
 
 export interface ApiResponse<T = any> {
   occupants?: Occupant[];
@@ -99,18 +99,22 @@ export async function apiFetchAttendance(
 }
 
 /**
- * Save an individual occupant's attendance status to Google Sheets.
+ * Save an individual occupant's attendance status and excuse details to Google Sheets.
  */
 export async function apiSetAttendance(
   webAppUrl: string,
   date: string,
   occupantName: string,
   status: AttendanceStatus,
+  excuseStatus: ExcuseStatus = 'none',
+  excuseReason: string = '',
 ): Promise<void> {
   await sendRequest(webAppUrl, 'setAttendance', {
     date,
     occupantName,
     status,
+    excuseStatus,
+    excuseReason,
   });
 }
 

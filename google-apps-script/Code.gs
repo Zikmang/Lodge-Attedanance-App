@@ -98,7 +98,7 @@ function handleAction(action, data) {
       return handleRemoveOccupant(data.name);
 
     case 'setAttendance':
-      return handleSetAttendance(data.date, data.occupantName, data.status);
+      return handleSetAttendance(data.date, data.occupantName, data.status, data.excuseStatus, data.excuseReason);
 
     case 'batchSetAttendance':
       return handleBatchSetAttendance(data.date, data.records);
@@ -156,18 +156,32 @@ function handleGetAttendance(date) {
   const sheet = ss.getSheetByName(SHEET_ATTENDANCE);
   const data = sheet.getDataRange().getValues();
 
-  // Row 1 is header: ['Date', 'Occupant Name', 'Status']
+  // Row 1 is header: ['Date', 'Occupant Name', 'Status', 'Excuse Status', 'Excuse Reason']
   const attendance = {};
   for (let i = 1; i < data.length; i++) {
     const rowDate = formatDateCell(data[i][0]);
     const rawName = data[i][1];
     const rawStatus = data[i][2];
+    const rawExcuseStatus = data[i][3];
+    const rawExcuseReason = data[i][4];
 
     if (rowDate === validDate && rawName && rawStatus) {
       const name = String(rawName).trim();
       const status = String(rawStatus).toUpperCase().trim();
       if (['PRESENT', 'ABSENT', 'PASS', 'DUTY'].indexOf(status) !== -1) {
-        attendance[name] = status;
+        let excuseStatus = 'none';
+        let excuseReason = '';
+        if (status === 'ABSENT') {
+          if (rawExcuseStatus && String(rawExcuseStatus).trim().toLowerCase() === 'provided') {
+            excuseStatus = 'provided';
+            excuseReason = rawExcuseReason ? String(rawExcuseReason).trim() : '';
+          }
+        }
+        attendance[name] = {
+          status: status,
+          excuseStatus: excuseStatus,
+          excuseReason: excuseReason,
+        };
       }
     }
   }
@@ -266,7 +280,7 @@ function handleRemoveOccupant(name) {
   return createJsonResponse({ success: true, name: cleanName, active: false });
 }
 
-function handleSetAttendance(date, occupantName, status) {
+function handleSetAttendance(date, occupantName, status, excuseStatus, excuseReason) {
   const validDate = validateDate(date);
   const cleanName = sanitizeName(occupantName);
   const validStatus = validateStatus(status);
@@ -279,6 +293,16 @@ function handleSetAttendance(date, occupantName, status) {
   }
   if (!validStatus) {
     return createJsonResponse({ error: 'Invalid status. Must be PRESENT, ABSENT, PASS, or DUTY.' }, 400);
+  }
+
+  // Validate and sanitize excuse
+  let finalExcuseStatus = 'none';
+  let finalExcuseReason = '';
+  if (validStatus === 'ABSENT') {
+    if (excuseStatus && String(excuseStatus).trim().toLowerCase() === 'provided') {
+      finalExcuseStatus = 'provided';
+      finalExcuseReason = excuseReason ? sanitizeReason(String(excuseReason)) : '';
+    }
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -298,8 +322,10 @@ function handleSetAttendance(date, occupantName, status) {
 
   if (foundRow !== -1) {
     sheet.getRange(foundRow, 3).setValue(validStatus);
+    sheet.getRange(foundRow, 4).setValue(finalExcuseStatus);
+    sheet.getRange(foundRow, 5).setValue(finalExcuseReason);
   } else {
-    sheet.appendRow([validDate, cleanName, validStatus]);
+    sheet.appendRow([validDate, cleanName, validStatus, finalExcuseStatus, finalExcuseReason]);
   }
 
   return createJsonResponse({
@@ -307,6 +333,8 @@ function handleSetAttendance(date, occupantName, status) {
     date: validDate,
     occupantName: cleanName,
     status: validStatus,
+    excuseStatus: finalExcuseStatus,
+    excuseReason: finalExcuseReason,
   });
 }
 
@@ -322,8 +350,12 @@ function handleBatchSetAttendance(date, records) {
   const names = Object.keys(records);
   for (let i = 0; i < names.length; i++) {
     const n = names[i];
-    const s = records[n];
-    handleSetAttendance(validDate, n, s);
+    const item = records[n];
+    if (item && typeof item === 'object') {
+      handleSetAttendance(validDate, n, item.status, item.excuseStatus, item.excuseReason);
+    } else {
+      handleSetAttendance(validDate, n, item);
+    }
   }
 
   return createJsonResponse({ success: true, count: names.length, date: validDate });
@@ -353,8 +385,18 @@ function ensureSheetsInitialized() {
   let attSheet = ss.getSheetByName(SHEET_ATTENDANCE);
   if (!attSheet) {
     attSheet = ss.insertSheet(SHEET_ATTENDANCE);
-    attSheet.appendRow(['Date', 'Occupant Name', 'Status']);
-    attSheet.getRange(1, 1, 1, 3).setFontWeight('bold');
+    attSheet.appendRow(['Date', 'Occupant Name', 'Status', 'Excuse Status', 'Excuse Reason']);
+    attSheet.getRange(1, 1, 1, 5).setFontWeight('bold');
+  } else {
+    // If sheet exists and has headers, ensure columns 4 & 5 have headers if missing
+    const lastCol = Math.max(attSheet.getLastColumn(), 5);
+    const headers = attSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    if (!headers[3]) {
+      attSheet.getRange(1, 4).setValue('Excuse Status').setFontWeight('bold');
+    }
+    if (!headers[4]) {
+      attSheet.getRange(1, 5).setValue('Excuse Reason').setFontWeight('bold');
+    }
   }
 }
 
@@ -383,6 +425,16 @@ function sanitizeName(name) {
   // Prevent spreadsheet injection formulas (=, +, -, @)
   if (/^[=\+\-@]/.test(trimmed)) {
     return null;
+  }
+  return trimmed;
+}
+
+function sanitizeReason(reason) {
+  if (!reason || typeof reason !== 'string') return '';
+  let trimmed = reason.trim().substring(0, 200);
+  // Prevent spreadsheet injection formulas (=, +, -, @)
+  if (/^[=\+\-@]/.test(trimmed)) {
+    trimmed = "'" + trimmed;
   }
   return trimmed;
 }

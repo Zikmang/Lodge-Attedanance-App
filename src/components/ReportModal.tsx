@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Copy, Share2, X, Check } from 'lucide-react';
-import { Occupant, AttendanceMap } from '../types/attendance';
+import { Occupant, AttendanceMap, getAttendanceRecord } from '../types/attendance';
 import { formatDateSimple, formatDisplayDate } from '../services/storage';
 
 interface Props {
@@ -21,51 +21,59 @@ export function buildAttendanceReportText(
 
   const presentList: string[] = [];
   const absentList: string[] = [];
+  const excuseList: { name: string; reason?: string }[] = [];
   const passList: string[] = [];
   const dutyList: string[] = [];
 
   occupants.forEach((occ) => {
-    const status = attendance[occ.name] || attendance[occ.id] || 'PRESENT';
-    if (status === 'PRESENT') {
+    const record = getAttendanceRecord(attendance[occ.name] || attendance[occ.id]);
+    if (record.status === 'PRESENT') {
       presentList.push(occ.name);
-    } else if (status === 'ABSENT') {
-      absentList.push(occ.name);
-    } else if (status === 'PASS') {
+    } else if (record.status === 'ABSENT') {
+      if (record.excuseStatus === 'provided') {
+        excuseList.push({ name: occ.name, reason: record.excuseReason });
+      } else {
+        absentList.push(occ.name);
+      }
+    } else if (record.status === 'PASS') {
       passList.push(occ.name);
-    } else if (status === 'DUTY') {
+    } else if (record.status === 'DUTY') {
       dutyList.push(occ.name);
     }
   });
 
   const formatList = (list: string[]) => {
     if (list.length === 0) return 'None';
-    return list.map((name, idx) => `${idx + 1}. ${name}`).join('\n');
+    return list.map((name) => `- ${name}`).join('\n');
   };
 
-  return `ATTENDANCE REPORT
-Date: ${displayDate}
+  const formatExcuseList = (list: { name: string; reason?: string }[]) => {
+    if (list.length === 0) return 'None';
+    return list
+      .map((item) => {
+        const reasonText = item.reason && item.reason.trim() ? ` — ${item.reason.trim()}` : '';
+        return `- ${item.name}${reasonText}`;
+      })
+      .join('\n');
+  };
+
+  return `LODGE ATTENDANCE
+${displayDate}
 
 PRESENT
-
 ${formatList(presentList)}
 
 ABSENT
-
 ${formatList(absentList)}
 
-PASS
+EXCUSE
+${formatExcuseList(excuseList)}
 
+PASS
 ${formatList(passList)}
 
 DUTY
-
-${formatList(dutyList)}
-
-Total Occupants: ${occupants.length}
-Present: ${presentList.length}
-Absent: ${absentList.length}
-Pass: ${passList.length}
-Duty: ${dutyList.length}`;
+${formatList(dutyList)}`;
 }
 
 export const ReportModal: React.FC<Props> = ({
@@ -85,15 +93,25 @@ export const ReportModal: React.FC<Props> = ({
 
   const presentList: string[] = [];
   const absentList: string[] = [];
+  const excuseList: { name: string; reason?: string }[] = [];
   const passList: string[] = [];
   const dutyList: string[] = [];
 
   occupants.forEach((occ) => {
-    const status = attendance[occ.name] || attendance[occ.id] || 'PRESENT';
-    if (status === 'PRESENT') presentList.push(occ.name);
-    else if (status === 'ABSENT') absentList.push(occ.name);
-    else if (status === 'PASS') passList.push(occ.name);
-    else if (status === 'DUTY') dutyList.push(occ.name);
+    const record = getAttendanceRecord(attendance[occ.name] || attendance[occ.id]);
+    if (record.status === 'PRESENT') {
+      presentList.push(occ.name);
+    } else if (record.status === 'ABSENT') {
+      if (record.excuseStatus === 'provided') {
+        excuseList.push({ name: occ.name, reason: record.excuseReason });
+      } else {
+        absentList.push(occ.name);
+      }
+    } else if (record.status === 'PASS') {
+      passList.push(occ.name);
+    } else if (record.status === 'DUTY') {
+      dutyList.push(occ.name);
+    }
   });
 
   const handleCopy = async () => {
@@ -165,29 +183,35 @@ export const ReportModal: React.FC<Props> = ({
             <p className="text-sm font-medium text-[#86868B]">{simpleDate}</p>
           </div>
 
-          {/* Four Compact Summaries */}
-          <div className="grid grid-cols-4 gap-2 sm:gap-3 p-3 sm:p-4 bg-[#F8F8FA] rounded-2xl border border-[#E5E5EA]/70">
+          {/* Five Compact Summaries */}
+          <div className="grid grid-cols-5 gap-1.5 sm:gap-2 p-3 sm:p-4 bg-[#F8F8FA] rounded-2xl border border-[#E5E5EA]/70">
             <div>
-              <p className="text-xs font-medium text-[#86868B]">Present</p>
-              <p className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+              <p className="text-[11px] font-medium text-[#86868B]">Present</p>
+              <p className="text-lg sm:text-xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
                 {presentList.length}
               </p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#86868B]">Absent</p>
-              <p className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+              <p className="text-[11px] font-medium text-[#86868B]">Absent</p>
+              <p className="text-lg sm:text-xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
                 {absentList.length}
               </p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#86868B]">Pass</p>
-              <p className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+              <p className="text-[11px] font-medium text-[#86868B]">Excuse</p>
+              <p className="text-lg sm:text-xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+                {excuseList.length}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium text-[#86868B]">Pass</p>
+              <p className="text-lg sm:text-xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
                 {passList.length}
               </p>
             </div>
             <div>
-              <p className="text-xs font-medium text-[#86868B]">Duty</p>
-              <p className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+              <p className="text-[11px] font-medium text-[#86868B]">Duty</p>
+              <p className="text-lg sm:text-xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
                 {dutyList.length}
               </p>
             </div>
@@ -229,6 +253,33 @@ export const ReportModal: React.FC<Props> = ({
                     <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center gap-2">
                       <span className="text-[#86868B] text-xs w-4">{i + 1}.</span>
                       <span>{name}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+
+            {/* Excuse section */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#2563EB] flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                Excuse ({excuseList.length})
+              </h3>
+              {excuseList.length === 0 ? (
+                <p className="text-xs text-[#86868B] italic pl-3">None</p>
+              ) : (
+                <ol className="divide-y divide-[#E5E5EA]/50 bg-[#F8F8FA] rounded-xl px-3 py-1 text-[#1D1D1F]">
+                  {excuseList.map((item, i) => (
+                    <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[#86868B] text-xs w-4">{i + 1}.</span>
+                        <span className="truncate">{item.name}</span>
+                      </div>
+                      {item.reason && item.reason.trim() ? (
+                        <span className="text-[11px] text-[#86868B] bg-white px-2 py-0.5 rounded-md border border-[#E5E5EA] shrink-0 max-w-[50%] truncate">
+                          {item.reason.trim()}
+                        </span>
+                      ) : null}
                     </li>
                   ))}
                 </ol>

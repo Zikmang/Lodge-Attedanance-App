@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowRight, Users, Cloud } from 'lucide-react';
-import { Occupant, AttendanceMap } from '../types/attendance';
+import { Occupant, AttendanceMap, getAttendanceRecord } from '../types/attendance';
 import { formatDisplayDate, getGreeting, getTodayKey } from '../services/storage';
 
 interface Props {
@@ -29,13 +29,25 @@ export const MainMenuView: React.FC<Props> = ({
   let absentCount = 0;
   let passCount = 0;
   let dutyCount = 0;
+  let excusedCount = 0;
+  let unexcusedCount = 0;
 
   occupants.forEach((o) => {
-    const status = attendance[o.name] || attendance[o.id] || 'PRESENT';
-    if (status === 'PRESENT') presentCount++;
-    else if (status === 'ABSENT') absentCount++;
-    else if (status === 'PASS') passCount++;
-    else if (status === 'DUTY') dutyCount++;
+    const record = getAttendanceRecord(attendance[o.name] || attendance[o.id]);
+    if (record.status === 'PRESENT') {
+      presentCount++;
+    } else if (record.status === 'ABSENT') {
+      absentCount++;
+      if (record.excuseStatus === 'provided') {
+        excusedCount++;
+      } else {
+        unexcusedCount++;
+      }
+    } else if (record.status === 'PASS') {
+      passCount++;
+    } else if (record.status === 'DUTY') {
+      dutyCount++;
+    }
   });
 
   return (
@@ -73,6 +85,11 @@ export const MainMenuView: React.FC<Props> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-[#C24138]" />
                 Absent
               </span>
+              {absentCount > 0 && (
+                <span className="text-[10px] text-[#86868B] block truncate">
+                  {excusedCount} exc · {unexcusedCount} unexc
+                </span>
+              )}
             </div>
 
             <div className="space-y-0.5">

@@ -1,13 +1,40 @@
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'PASS' | 'DUTY';
 
+export type ExcuseStatus = 'none' | 'provided';
+
+export interface AttendanceRecord {
+  status: AttendanceStatus;
+  excuseStatus: ExcuseStatus;
+  excuseReason?: string;
+}
+
+export type AttendanceValue = AttendanceStatus | AttendanceRecord;
+
+export type AttendanceMap = Record<string, AttendanceValue>;
+
+export function getAttendanceRecord(val: AttendanceValue | undefined): AttendanceRecord {
+  if (!val) {
+    return { status: 'PRESENT', excuseStatus: 'none', excuseReason: '' };
+  }
+  if (typeof val === 'string') {
+    return { status: val, excuseStatus: 'none', excuseReason: '' };
+  }
+  const status = val.status || 'PRESENT';
+  const excuseStatus = status === 'ABSENT' ? (val.excuseStatus || 'none') : 'none';
+  const excuseReason = status === 'ABSENT' && excuseStatus === 'provided' ? (val.excuseReason || '') : '';
+  return {
+    status,
+    excuseStatus,
+    excuseReason,
+  };
+}
+
 export interface Occupant {
   id: string;
   name: string;
   active?: boolean;
   rowIndex?: number;
 }
-
-export type AttendanceMap = Record<string, AttendanceStatus>;
 
 export interface SheetConfig {
   webAppUrl: string;

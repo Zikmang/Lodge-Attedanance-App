@@ -3,6 +3,8 @@ import {
   Occupant,
   AttendanceMap,
   AttendanceStatus,
+  ExcuseStatus,
+  AttendanceRecord,
 } from './types/attendance';
 import {
   apiFetchOccupants,
@@ -119,15 +121,30 @@ export default function App() {
     return () => window.removeEventListener('focus', handleFocus);
   }, [webAppUrl, syncFromSheet]);
 
-  // Save attendance status for an occupant
+  // Save attendance status and optional excuse for an occupant
   const handleUpdateStatus = useCallback(
-    async (occupant: Occupant, status: AttendanceStatus) => {
+    async (
+      occupant: Occupant,
+      status: AttendanceStatus,
+      excuseStatus: ExcuseStatus = 'none',
+      excuseReason: string = ''
+    ) => {
       const todayKey = getTodayKey();
       const occupantKey = occupant.name;
 
+      const cleanExcuseStatus: ExcuseStatus = status === 'ABSENT' ? excuseStatus : 'none';
+      const cleanExcuseReason: string =
+        status === 'ABSENT' && cleanExcuseStatus === 'provided' ? excuseReason : '';
+
+      const record: AttendanceRecord = {
+        status,
+        excuseStatus: cleanExcuseStatus,
+        excuseReason: cleanExcuseReason,
+      };
+
       // Optimistically update local state & cache
       setAttendance((prev) => {
-        const next = { ...prev, [occupantKey]: status, [occupant.id]: status };
+        const next = { ...prev, [occupantKey]: record, [occupant.id]: record };
         saveCachedAttendance(todayKey, next);
         return next;
       });
@@ -135,7 +152,14 @@ export default function App() {
       // Send to Google Sheets if connected
       if (webAppUrl) {
         try {
-          await apiSetAttendance(webAppUrl, todayKey, occupant.name, status);
+          await apiSetAttendance(
+            webAppUrl,
+            todayKey,
+            occupant.name,
+            status,
+            cleanExcuseStatus,
+            cleanExcuseReason
+          );
         } catch (err: any) {
           console.error('Failed to save attendance to Google Sheet:', err);
           showToast('Failed to save to Google Sheet');
@@ -151,8 +175,13 @@ export default function App() {
     const resetMap: AttendanceMap = {};
 
     occupants.forEach((o) => {
-      resetMap[o.name] = 'PRESENT';
-      resetMap[o.id] = 'PRESENT';
+      const record: AttendanceRecord = {
+        status: 'PRESENT',
+        excuseStatus: 'none',
+        excuseReason: '',
+      };
+      resetMap[o.name] = record;
+      resetMap[o.id] = record;
     });
 
     setAttendance(resetMap);
@@ -163,7 +192,7 @@ export default function App() {
       try {
         // Send updates to Google Sheet
         const promises = occupants.map((o) =>
-          apiSetAttendance(webAppUrl, todayKey, o.name, 'PRESENT')
+          apiSetAttendance(webAppUrl, todayKey, o.name, 'PRESENT', 'none', '')
         );
         await Promise.all(promises);
       } catch (err: any) {
