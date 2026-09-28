@@ -166,7 +166,7 @@ function handleGetAttendance(date) {
     if (rowDate === validDate && rawName && rawStatus) {
       const name = String(rawName).trim();
       const status = String(rawStatus).toUpperCase().trim();
-      if (['PRESENT', 'ABSENT', 'PASS'].indexOf(status) !== -1) {
+      if (['PRESENT', 'ABSENT', 'PASS', 'DUTY'].indexOf(status) !== -1) {
         attendance[name] = status;
       }
     }
@@ -278,7 +278,7 @@ function handleSetAttendance(date, occupantName, status) {
     return createJsonResponse({ error: 'Invalid occupant name.' }, 400);
   }
   if (!validStatus) {
-    return createJsonResponse({ error: 'Invalid status. Must be PRESENT, ABSENT, or PASS.' }, 400);
+    return createJsonResponse({ error: 'Invalid status. Must be PRESENT, ABSENT, PASS, or DUTY.' }, 400);
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -370,7 +370,7 @@ function validateDate(dateStr) {
 function validateStatus(status) {
   if (!status || typeof status !== 'string') return null;
   const upper = status.trim().toUpperCase();
-  if (upper === 'PRESENT' || upper === 'ABSENT' || upper === 'PASS') {
+  if (upper === 'PRESENT' || upper === 'ABSENT' || upper === 'PASS' || upper === 'DUTY') {
     return upper;
   }
   return null;

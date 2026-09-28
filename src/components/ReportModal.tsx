@@ -22,6 +22,7 @@ export function buildAttendanceReportText(
   const presentList: string[] = [];
   const absentList: string[] = [];
   const passList: string[] = [];
+  const dutyList: string[] = [];
 
   occupants.forEach((occ) => {
     const status = attendance[occ.name] || attendance[occ.id] || 'PRESENT';
@@ -31,6 +32,8 @@ export function buildAttendanceReportText(
       absentList.push(occ.name);
     } else if (status === 'PASS') {
       passList.push(occ.name);
+    } else if (status === 'DUTY') {
+      dutyList.push(occ.name);
     }
   });
 
@@ -54,10 +57,15 @@ PASS
 
 ${formatList(passList)}
 
+DUTY
+
+${formatList(dutyList)}
+
 Total Occupants: ${occupants.length}
 Present: ${presentList.length}
 Absent: ${absentList.length}
-Pass: ${passList.length}`;
+Pass: ${passList.length}
+Duty: ${dutyList.length}`;
 }
 
 export const ReportModal: React.FC<Props> = ({
@@ -78,12 +86,14 @@ export const ReportModal: React.FC<Props> = ({
   const presentList: string[] = [];
   const absentList: string[] = [];
   const passList: string[] = [];
+  const dutyList: string[] = [];
 
   occupants.forEach((occ) => {
     const status = attendance[occ.name] || attendance[occ.id] || 'PRESENT';
     if (status === 'PRESENT') presentList.push(occ.name);
     else if (status === 'ABSENT') absentList.push(occ.name);
     else if (status === 'PASS') passList.push(occ.name);
+    else if (status === 'DUTY') dutyList.push(occ.name);
   });
 
   const handleCopy = async () => {
@@ -155,24 +165,30 @@ export const ReportModal: React.FC<Props> = ({
             <p className="text-sm font-medium text-[#86868B]">{simpleDate}</p>
           </div>
 
-          {/* Three Compact Summaries */}
-          <div className="grid grid-cols-3 gap-3 p-4 bg-[#F8F8FA] rounded-2xl border border-[#E5E5EA]/70">
+          {/* Four Compact Summaries */}
+          <div className="grid grid-cols-4 gap-2 sm:gap-3 p-3 sm:p-4 bg-[#F8F8FA] rounded-2xl border border-[#E5E5EA]/70">
             <div>
               <p className="text-xs font-medium text-[#86868B]">Present</p>
-              <p className="text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+              <p className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
                 {presentList.length}
               </p>
             </div>
             <div>
               <p className="text-xs font-medium text-[#86868B]">Absent</p>
-              <p className="text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+              <p className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
                 {absentList.length}
               </p>
             </div>
             <div>
               <p className="text-xs font-medium text-[#86868B]">Pass</p>
-              <p className="text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+              <p className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
                 {passList.length}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-[#86868B]">Duty</p>
+              <p className="text-xl sm:text-2xl font-semibold text-[#1D1D1F] tracking-tight mt-0.5">
+                {dutyList.length}
               </p>
             </div>
           </div>
@@ -230,6 +246,26 @@ export const ReportModal: React.FC<Props> = ({
               ) : (
                 <ol className="divide-y divide-[#E5E5EA]/50 bg-[#F8F8FA] rounded-xl px-3 py-1 text-[#1D1D1F]">
                   {passList.map((name, i) => (
+                    <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center gap-2">
+                      <span className="text-[#86868B] text-xs w-4">{i + 1}.</span>
+                      <span>{name}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+
+            {/* Duty section */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#2563EB] flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                Duty ({dutyList.length})
+              </h3>
+              {dutyList.length === 0 ? (
+                <p className="text-xs text-[#86868B] italic pl-3">None</p>
+              ) : (
+                <ol className="divide-y divide-[#E5E5EA]/50 bg-[#F8F8FA] rounded-xl px-3 py-1 text-[#1D1D1F]">
+                  {dutyList.map((name, i) => (
                     <li key={i} className="py-1.5 text-xs sm:text-sm flex items-center gap-2">
                       <span className="text-[#86868B] text-xs w-4">{i + 1}.</span>
                       <span>{name}</span>

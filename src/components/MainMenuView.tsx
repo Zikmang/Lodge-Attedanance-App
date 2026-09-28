@@ -28,12 +28,14 @@ export const MainMenuView: React.FC<Props> = ({
   let presentCount = 0;
   let absentCount = 0;
   let passCount = 0;
+  let dutyCount = 0;
 
   occupants.forEach((o) => {
     const status = attendance[o.name] || attendance[o.id] || 'PRESENT';
     if (status === 'PRESENT') presentCount++;
     else if (status === 'ABSENT') absentCount++;
     else if (status === 'PASS') passCount++;
+    else if (status === 'DUTY') dutyCount++;
   });
 
   return (
@@ -48,38 +50,48 @@ export const MainMenuView: React.FC<Props> = ({
         </div>
 
         {/* Compact Attendance Summary */}
-        <div className="bg-white rounded-2xl p-5 border border-[#E5E5EA] shadow-2xs">
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E5E5EA] shadow-2xs">
           <p className="text-xs font-medium uppercase tracking-wider text-[#86868B] mb-3">
             Today's Attendance
           </p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <div className="space-y-0.5">
-              <span className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] block">
+              <span className="text-xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] block">
                 {presentCount}
               </span>
-              <span className="text-xs font-medium text-[#2D7D46] inline-flex items-center gap-1">
+              <span className="text-[11px] sm:text-xs font-medium text-[#2D7D46] inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#2D7D46]" />
                 Present
               </span>
             </div>
 
             <div className="space-y-0.5">
-              <span className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] block">
+              <span className="text-xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] block">
                 {absentCount}
               </span>
-              <span className="text-xs font-medium text-[#C24138] inline-flex items-center gap-1">
+              <span className="text-[11px] sm:text-xs font-medium text-[#C24138] inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#C24138]" />
                 Absent
               </span>
             </div>
 
             <div className="space-y-0.5">
-              <span className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] block">
+              <span className="text-xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] block">
                 {passCount}
               </span>
-              <span className="text-xs font-medium text-[#B46800] inline-flex items-center gap-1">
+              <span className="text-[11px] sm:text-xs font-medium text-[#B46800] inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#B46800]" />
                 Pass
+              </span>
+            </div>
+
+            <div className="space-y-0.5">
+              <span className="text-xl sm:text-3xl font-semibold tracking-tight text-[#1D1D1F] block">
+                {dutyCount}
+              </span>
+              <span className="text-[11px] sm:text-xs font-medium text-[#2563EB] inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                Duty
               </span>
             </div>
           </div>

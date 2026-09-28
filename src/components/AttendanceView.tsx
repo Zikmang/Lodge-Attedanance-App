@@ -40,18 +40,21 @@ export const AttendanceView: React.FC<Props> = ({
     let present = 0;
     let absent = 0;
     let pass = 0;
+    let duty = 0;
 
     occupants.forEach((o) => {
       const status = attendance[o.name] || attendance[o.id] || 'PRESENT';
       if (status === 'PRESENT') present++;
       else if (status === 'ABSENT') absent++;
       else if (status === 'PASS') pass++;
+      else if (status === 'DUTY') duty++;
     });
 
     return {
       present,
       absent,
       pass,
+      duty,
       total: occupants.length,
     };
   }, [occupants, attendance]);
@@ -101,8 +104,8 @@ export const AttendanceView: React.FC<Props> = ({
       </div>
 
       {/* Compact Horizontal Summary */}
-      <div className="bg-white rounded-2xl px-4 py-3 border border-[#E5E5EA] shadow-2xs mb-5 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-sm">
+      <div className="bg-white rounded-2xl px-3 sm:px-4 py-3 border border-[#E5E5EA] shadow-2xs mb-5 flex items-center justify-between text-xs sm:text-sm">
+        <div className="flex items-center gap-1 sm:gap-1.5">
           <span className="w-2 h-2 rounded-full bg-[#2D7D46]" />
           <span className="font-semibold text-[#1D1D1F]">{totals.present}</span>
           <span className="text-[#86868B] font-normal">Present</span>
@@ -110,7 +113,7 @@ export const AttendanceView: React.FC<Props> = ({
 
         <span className="text-[#E5E5EA]">|</span>
 
-        <div className="flex items-center gap-1.5 text-sm">
+        <div className="flex items-center gap-1 sm:gap-1.5">
           <span className="w-2 h-2 rounded-full bg-[#C24138]" />
           <span className="font-semibold text-[#1D1D1F]">{totals.absent}</span>
           <span className="text-[#86868B] font-normal">Absent</span>
@@ -118,10 +121,18 @@ export const AttendanceView: React.FC<Props> = ({
 
         <span className="text-[#E5E5EA]">|</span>
 
-        <div className="flex items-center gap-1.5 text-sm">
+        <div className="flex items-center gap-1 sm:gap-1.5">
           <span className="w-2 h-2 rounded-full bg-[#B46800]" />
           <span className="font-semibold text-[#1D1D1F]">{totals.pass}</span>
           <span className="text-[#86868B] font-normal">Pass</span>
+        </div>
+
+        <span className="text-[#E5E5EA]">|</span>
+
+        <div className="flex items-center gap-1 sm:gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#2563EB]" />
+          <span className="font-semibold text-[#1D1D1F]">{totals.duty}</span>
+          <span className="text-[#86868B] font-normal">Duty</span>
         </div>
       </div>
 
@@ -171,16 +182,16 @@ export const AttendanceView: React.FC<Props> = ({
                   </span>
                 </div>
 
-                {/* Elegant Compact Segmented Control: Present | Absent | Pass */}
+                {/* Elegant Compact Segmented Control: Present | Absent | Pass | Duty */}
                 <div
-                  className="bg-[#EBEBEF] p-0.5 rounded-xl inline-flex items-center shrink-0 self-start sm:self-auto"
+                  className="bg-[#EBEBEF] p-0.5 rounded-xl grid grid-cols-4 sm:flex items-center shrink-0 w-full sm:w-auto"
                   role="group"
                   aria-label={`Attendance status for ${occupant.name}`}
                 >
                   <button
                     type="button"
                     onClick={() => onUpdateStatus(occupant, 'PRESENT')}
-                    className={`px-3 py-1.5 rounded-[10px] text-xs font-medium transition-all cursor-pointer ${
+                    className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
                       currentStatus === 'PRESENT'
                         ? 'bg-white text-[#2D7D46] font-semibold shadow-2xs'
                         : 'text-[#636366] hover:text-[#1D1D1F]'
@@ -192,7 +203,7 @@ export const AttendanceView: React.FC<Props> = ({
                   <button
                     type="button"
                     onClick={() => onUpdateStatus(occupant, 'ABSENT')}
-                    className={`px-3 py-1.5 rounded-[10px] text-xs font-medium transition-all cursor-pointer ${
+                    className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
                       currentStatus === 'ABSENT'
                         ? 'bg-white text-[#C24138] font-semibold shadow-2xs'
                         : 'text-[#636366] hover:text-[#1D1D1F]'
@@ -204,13 +215,25 @@ export const AttendanceView: React.FC<Props> = ({
                   <button
                     type="button"
                     onClick={() => onUpdateStatus(occupant, 'PASS')}
-                    className={`px-3 py-1.5 rounded-[10px] text-xs font-medium transition-all cursor-pointer ${
+                    className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
                       currentStatus === 'PASS'
                         ? 'bg-white text-[#B46800] font-semibold shadow-2xs'
                         : 'text-[#636366] hover:text-[#1D1D1F]'
                     }`}
                   >
                     Pass
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onUpdateStatus(occupant, 'DUTY')}
+                    className={`px-2 sm:px-3 py-1.5 rounded-[10px] text-xs font-medium text-center transition-all cursor-pointer ${
+                      currentStatus === 'DUTY'
+                        ? 'bg-white text-[#2563EB] font-semibold shadow-2xs'
+                        : 'text-[#636366] hover:text-[#1D1D1F]'
+                    }`}
+                  >
+                    Duty
                   </button>
                 </div>
               </div>
