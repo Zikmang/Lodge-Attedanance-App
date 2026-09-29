@@ -1,3 +1,8 @@
 // Script to generate/maintain official NASOC PWA icon assets
-// Official icon assets are stored directly in public/ and dist/
-console.log('Official NASOC icon assets are configured in public directory.');
+const { execSync } = require('child_process');
+try {
+  execSync('python3 scripts/generate-icons.py', { stdio: 'inherit' });
+  console.log('Official NASOC icon assets generated successfully.');
+} catch (e) {
+  console.error('Failed to generate icons:', e.message);
+}
