@@ -1,4 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 1000 1000">
+import fs from 'fs';
+import path from 'path';
+import sharp from 'sharp';
+
+// Official SVG vector representation of the user's uploaded logo
+// Preserves exact colors: forest green shield (#125e38), red diagonal band (#e22325), black scorpion (#0d1110)
+export function getLogoSvg(size = 1000, isMaskable = false) {
+  // If maskable, scale the shield to fit within the 80% safe zone (800x800 centered in 1000x1000)
+  // and fill background with matching forest green (#125e38)
+  const scale = isMaskable ? 0.78 : 0.94;
+  const transX = isMaskable ? 500 : 500;
+  const transY = isMaskable ? 500 : 500;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1000 1000">
   <defs>
     <!-- Shield clipping path -->
     <clipPath id="shield-clip">
@@ -13,10 +26,10 @@
     </clipPath>
   </defs>
 
-  
+  ${isMaskable ? `<rect width="1000" height="1000" fill="#125e38" />` : ''}
 
   <!-- Shield scaled and centered -->
-  <g transform="translate(500, 500) scale(0.94) translate(-500, -500)">
+  <g transform="translate(${transX}, ${transY}) scale(${scale}) translate(-500, -500)">
     <!-- Green Shield Body -->
     <path d="M 175,45
              L 825,45
@@ -95,4 +108,53 @@
       <path d="M -40,42 C -65,90 -105,122 -150,140" fill="none" stroke-width="12" />
     </g>
   </g>
-</svg>
+</svg>`;
+}
+
+export async function generateAllIcons() {
+  const publicDir = path.resolve('public');
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir, { recursive: true });
+  }
+
+  // 1. icon.svg
+  const svgContent = getLogoSvg(512, false);
+  fs.writeFileSync(path.join(publicDir, 'icon.svg'), svgContent);
+  console.log('Saved public/icon.svg');
+
+  // 2. pwa-512x512.png (Transparent outside shield)
+  await sharp(Buffer.from(getLogoSvg(512, false)))
+    .png()
+    .toFile(path.join(publicDir, 'pwa-512x512.png'));
+  console.log('Saved public/pwa-512x512.png');
+
+  // 3. pwa-192x192.png (Transparent outside shield)
+  await sharp(Buffer.from(getLogoSvg(192, false)))
+    .png()
+    .toFile(path.join(publicDir, 'pwa-192x192.png'));
+  console.log('Saved public/pwa-192x192.png');
+
+  // 4. pwa-maskable-512x512.png (Safe-zone compliant, forest green background)
+  await sharp(Buffer.from(getLogoSvg(512, true)))
+    .png()
+    .toFile(path.join(publicDir, 'pwa-maskable-512x512.png'));
+  console.log('Saved public/pwa-maskable-512x512.png');
+
+  // 5. pwa-maskable-192x192.png (Safe-zone compliant, forest green background)
+  await sharp(Buffer.from(getLogoSvg(192, true)))
+    .png()
+    .toFile(path.join(publicDir, 'pwa-maskable-192x192.png'));
+  console.log('Saved public/pwa-maskable-192x192.png');
+
+  // 6. apple-touch-icon.png (180x180, iOS non-transparent standard)
+  await sharp(Buffer.from(getLogoSvg(180, true)))
+    .png()
+    .toFile(path.join(publicDir, 'apple-touch-icon.png'));
+  console.log('Saved public/apple-touch-icon.png');
+}
+
+// Run if called directly
+generateAllIcons().catch(err => {
+  console.error('Icon generation failed:', err);
+  process.exit(1);
+});
