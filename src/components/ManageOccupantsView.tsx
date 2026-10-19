@@ -56,8 +56,8 @@ export const ManageOccupantsView: React.FC<Props> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Filtered occupants
-  const filteredOccupants = occupants.filter((o) =>
-    o.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredOccupants = (occupants || []).filter((o) =>
+    (o?.name || '').toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handleAddSubmit = async (e: React.FormEvent) => {

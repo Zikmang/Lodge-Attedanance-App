@@ -161,7 +161,25 @@ export function getCachedOccupants(): Occupant[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        return parsed
+          .filter(Boolean)
+          .map((item: any, index: number) => {
+            if (typeof item === 'string') {
+              return {
+                id: `occ-${encodeURIComponent(item)}`,
+                name: item,
+                active: true,
+                rowIndex: index + 2,
+              };
+            }
+            const name = String(item.name || `Occupant ${index + 1}`).trim();
+            return {
+              id: String(item.id || `occ-${encodeURIComponent(name || String(index))}`),
+              name: name || `Occupant ${index + 1}`,
+              active: item.active !== false,
+              rowIndex: typeof item.rowIndex === 'number' ? item.rowIndex : index + 2,
+            };
+          });
       }
     }
   } catch (err) {
@@ -188,7 +206,10 @@ export function getCachedAttendance(dateKey: string = getTodayKey()): Attendance
   try {
     const raw = localStorage.getItem(`${ATTENDANCE_CACHE_PREFIX}${dateKey}`);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
     }
   } catch (err) {
     console.error('Error reading cached attendance', err);
@@ -198,12 +219,11 @@ export function getCachedAttendance(dateKey: string = getTodayKey()): Attendance
 
 export function saveCachedAttendance(dateKey: string, map: AttendanceMap): void {
   try {
-    localStorage.setItem(`${ATTENDANCE_PREFIX}${dateKey}`, JSON.stringify(map));
+    localStorage.setItem(`${ATTENDANCE_CACHE_PREFIX}${dateKey}`, JSON.stringify(map));
   } catch (err) {
     console.error('Error saving cached attendance', err);
   }
 }
-const ATTENDANCE_PREFIX = ATTENDANCE_CACHE_PREFIX;
 
 /**
  * Offline Sync Queue Management.

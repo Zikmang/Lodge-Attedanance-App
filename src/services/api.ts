@@ -27,49 +27,63 @@ async function sendRequest(
     'batchSetAttendance',
   ].includes(action);
 
-  if (isMutation) {
-    const res = await fetch(webAppUrl, {
-      method: 'POST',
-      redirect: 'follow',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify({ action, ...payload }),
-    });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000); // 12 second network timeout
 
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}`);
-    }
+  try {
+    if (isMutation) {
+      const res = await fetch(webAppUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify({ action, ...payload }),
+        signal: controller.signal,
+      });
 
-    const data = await res.json();
-    if (data.error) {
-      throw new Error(data.error);
-    }
-    return data;
-  } else {
-    // GET request
-    const url = new URL(webAppUrl);
-    url.searchParams.set('action', action);
-    Object.entries(payload).forEach(([key, val]) => {
-      if (val !== undefined && val !== null) {
-        url.searchParams.set(key, String(val));
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
       }
-    });
 
-    const res = await fetch(url.toString(), {
-      method: 'GET',
-      redirect: 'follow',
-    });
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      return data;
+    } else {
+      // GET request
+      const url = new URL(webAppUrl);
+      url.searchParams.set('action', action);
+      Object.entries(payload).forEach(([key, val]) => {
+        if (val !== undefined && val !== null) {
+          url.searchParams.set(key, String(val));
+        }
+      });
 
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}`);
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      return data;
     }
-
-    const data = await res.json();
-    if (data.error) {
-      throw new Error(data.error);
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Connection timed out. Please check your internet connection.');
     }
-    return data;
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

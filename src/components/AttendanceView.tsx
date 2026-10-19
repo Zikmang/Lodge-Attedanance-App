@@ -41,9 +41,10 @@ export const AttendanceView: React.FC<Props> = ({
 
   // Filtered occupants
   const filteredOccupants = useMemo(() => {
+    if (!Array.isArray(occupants)) return [];
     if (!searchQuery.trim()) return occupants;
     const q = searchQuery.toLowerCase();
-    return occupants.filter((o) => o.name.toLowerCase().includes(q));
+    return occupants.filter((o) => (o?.name || '').toLowerCase().includes(q));
   }, [occupants, searchQuery]);
 
   // Compute live totals based on occupant.name or occupant.id
@@ -55,8 +56,9 @@ export const AttendanceView: React.FC<Props> = ({
     let excused = 0;
     let unexcused = 0;
 
-    occupants.forEach((o) => {
-      const record = getAttendanceRecord(attendance[o.name] || attendance[o.id]);
+    (occupants || []).forEach((o) => {
+      if (!o) return;
+      const record = getAttendanceRecord(attendance[o.name] || (o.id ? attendance[o.id] : undefined));
       if (record.status === 'PRESENT') {
         present++;
       } else if (record.status === 'ABSENT') {

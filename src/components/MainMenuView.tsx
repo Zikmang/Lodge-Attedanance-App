@@ -33,8 +33,9 @@ export const MainMenuView: React.FC<Props> = ({
   let excusedCount = 0;
   let unexcusedCount = 0;
 
-  occupants.forEach((o) => {
-    const record = getAttendanceRecord(attendance[o.name] || attendance[o.id]);
+  (occupants || []).forEach((o) => {
+    if (!o) return;
+    const record = getAttendanceRecord(attendance[o.name] || (o.id ? attendance[o.id] : undefined));
     if (record.status === 'PRESENT') {
       presentCount++;
     } else if (record.status === 'ABSENT') {

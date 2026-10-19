@@ -31,8 +31,10 @@ export function buildAttendanceReportText(
   const passList: string[] = [];
   const dutyList: string[] = [];
 
-  occupants.forEach((occ) => {
-    const record = getAttendanceRecord(attendance[occ.name] || attendance[occ.id]);
+  (occupants || []).forEach((occ) => {
+    if (!occ) return;
+    const name = occ.name || occ.id || 'Occupant';
+    const record = getAttendanceRecord(attendance[occ.name] || (occ.id ? attendance[occ.id] : undefined));
     if (record.status === 'PRESENT') {
       presentList.push(occ.name);
     } else if (record.status === 'ABSENT') {
@@ -121,8 +123,10 @@ export const ReportModal: React.FC<Props> = ({
   const passList: string[] = [];
   const dutyList: string[] = [];
 
-  occupants.forEach((occ) => {
-    const record = getAttendanceRecord(attendance[occ.name] || attendance[occ.id]);
+  (occupants || []).forEach((occ) => {
+    if (!occ) return;
+    const name = occ.name || occ.id || 'Occupant';
+    const record = getAttendanceRecord(attendance[occ.name] || (occ.id ? attendance[occ.id] : undefined));
     if (record.status === 'PRESENT') {
       presentList.push(occ.name);
     } else if (record.status === 'ABSENT') {
