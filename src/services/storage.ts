@@ -30,6 +30,48 @@ export function getGreeting(): string {
   return 'Good evening';
 }
 
+export type SessionType = 'morning' | 'evening';
+
+export function getCurrentSession(): SessionType {
+  const hour = new Date().getHours();
+  return hour < 12 ? 'morning' : 'evening';
+}
+
+export function getOrdinalSuffix(day: number): string {
+  const j = day % 10;
+  const k = day % 100;
+  if (j === 1 && k !== 11) {
+    return `${day}st`;
+  }
+  if (j === 2 && k !== 12) {
+    return `${day}nd`;
+  }
+  if (j === 3 && k !== 13) {
+    return `${day}rd`;
+  }
+  return `${day}th`;
+}
+
+export function formatReportHeaderDate(
+  dateKey: string = getTodayKey(),
+  session: SessionType = getCurrentSession()
+): string {
+  try {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const date = new Date(y, m - 1, d, 12, 0, 0);
+    const weekday = date.toLocaleDateString('en-GB', { weekday: 'long' });
+    const dayWithSuffix = getOrdinalSuffix(d);
+    const month = date.toLocaleDateString('en-GB', { month: 'long' });
+    const year = date.getFullYear();
+
+    const sessionLabel = session === 'morning' ? 'Morning PT' : 'Evening Games';
+    return `${weekday} ${dayWithSuffix} ${month} ${year} ${sessionLabel}`;
+  } catch {
+    const sessionLabel = session === 'morning' ? 'Morning PT' : 'Evening Games';
+    return `${dateKey} ${sessionLabel}`;
+  }
+}
+
 export function formatDisplayDate(dateKey: string = getTodayKey()): string {
   try {
     const [y, m, d] = dateKey.split('-').map(Number);

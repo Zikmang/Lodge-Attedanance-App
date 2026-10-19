@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Copy, Share2, X, Check } from 'lucide-react';
 import { Occupant, AttendanceMap, getAttendanceRecord } from '../types/attendance';
-import { formatDateSimple, formatDisplayDate } from '../services/storage';
+import {
+  formatReportHeaderDate,
+  getCurrentSession,
+  SessionType,
+} from '../services/storage';
 
 interface Props {
   isOpen: boolean;
   dateKey: string;
   occupants: Occupant[];
   attendance: AttendanceMap;
+  initialSession?: SessionType;
   onClose: () => void;
   onShowToast: (message: string) => void;
 }
@@ -16,8 +21,9 @@ export function buildAttendanceReportText(
   dateKey: string,
   occupants: Occupant[],
   attendance: AttendanceMap,
+  session: SessionType = getCurrentSession(),
 ): string {
-  const displayDate = formatDisplayDate(dateKey);
+  const header = formatReportHeaderDate(dateKey, session);
 
   const presentList: string[] = [];
   const absentList: string[] = [];
@@ -79,7 +85,6 @@ export function buildAttendanceReportText(
     sections.push(`DUTY\n${items}`);
   }
 
-  const header = `LODGE ATTENDANCE\n${displayDate}`;
   if (sections.length === 0) {
     return `${header}\n\nNo attendance recorded`;
   }
@@ -92,15 +97,23 @@ export const ReportModal: React.FC<Props> = ({
   dateKey,
   occupants,
   attendance,
+  initialSession,
   onClose,
   onShowToast,
 }) => {
+  const [session, setSession] = useState<SessionType>(() => initialSession || getCurrentSession());
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSession(initialSession || getCurrentSession());
+    }
+  }, [isOpen, initialSession]);
 
   if (!isOpen) return null;
 
-  const simpleDate = formatDateSimple(dateKey);
-  const reportText = buildAttendanceReportText(dateKey, occupants, attendance);
+  const headerTitle = formatReportHeaderDate(dateKey, session);
+  const reportText = buildAttendanceReportText(dateKey, occupants, attendance, session);
 
   const presentList: string[] = [];
   const absentList: string[] = [];
@@ -151,7 +164,7 @@ export const ReportModal: React.FC<Props> = ({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Attendance Report - ${simpleDate}`,
+          title: headerTitle,
           text: reportText,
         });
         onShowToast('Report shared');
@@ -186,12 +199,44 @@ export const ReportModal: React.FC<Props> = ({
         </div>
 
         {/* Clean Document Card Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-white">
+        <div className="p-6 overflow-y-auto flex-1 space-y-5 bg-white">
           <div className="space-y-1">
             <h2 className="text-2xl font-semibold text-[#1D1D1F] tracking-tight">
               Attendance Report
             </h2>
-            <p className="text-sm font-medium text-[#86868B]">{simpleDate}</p>
+            <p className="text-sm sm:text-base font-semibold text-[#1D1D1F] tracking-tight">
+              {headerTitle}
+            </p>
+          </div>
+
+          {/* Session Selector (Morning PT vs Evening Games) */}
+          <div
+            className="bg-[#EBEBEF] p-1 rounded-xl grid grid-cols-2 gap-1"
+            role="group"
+            aria-label="Session type"
+          >
+            <button
+              type="button"
+              onClick={() => setSession('morning')}
+              className={`py-2 px-3 rounded-lg text-xs sm:text-sm font-medium text-center transition-all cursor-pointer ${
+                session === 'morning'
+                  ? 'bg-white text-[#1D1D1F] font-semibold shadow-2xs'
+                  : 'text-[#636366] hover:text-[#1D1D1F]'
+              }`}
+            >
+              Morning PT
+            </button>
+            <button
+              type="button"
+              onClick={() => setSession('evening')}
+              className={`py-2 px-3 rounded-lg text-xs sm:text-sm font-medium text-center transition-all cursor-pointer ${
+                session === 'evening'
+                  ? 'bg-white text-[#1D1D1F] font-semibold shadow-2xs'
+                  : 'text-[#636366] hover:text-[#1D1D1F]'
+              }`}
+            >
+              Evening Games
+            </button>
           </div>
 
           {/* Five Compact Summaries */}

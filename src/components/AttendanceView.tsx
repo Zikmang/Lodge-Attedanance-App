@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { ChevronLeft, Search, RotateCcw, FileText, RefreshCw } from 'lucide-react';
 import { Occupant, AttendanceMap, AttendanceStatus, ExcuseStatus, getAttendanceRecord } from '../types/attendance';
-import { formatDateSimple, getTodayKey } from '../services/storage';
+import { formatReportHeaderDate, getTodayKey, SessionType } from '../services/storage';
 
 interface Props {
   occupants: Occupant[];
   attendance: AttendanceMap;
   isSyncing: boolean;
+  session: SessionType;
+  onSessionChange: (session: SessionType) => void;
   onUpdateStatus: (
     occupant: Occupant,
     status: AttendanceStatus,
@@ -23,6 +25,8 @@ export const AttendanceView: React.FC<Props> = ({
   occupants,
   attendance,
   isSyncing,
+  session,
+  onSessionChange,
   onUpdateStatus,
   onResetAllPresent,
   onGenerateReport,
@@ -34,7 +38,6 @@ export const AttendanceView: React.FC<Props> = ({
   const reasonDebounceRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const dateKey = getTodayKey();
-  const simpleDate = formatDateSimple(dateKey);
 
   // Filtered occupants
   const filteredOccupants = useMemo(() => {
@@ -175,11 +178,45 @@ export const AttendanceView: React.FC<Props> = ({
       </div>
 
       {/* Screen Title */}
-      <div className="space-y-1 mb-5">
-        <h1 className="text-2xl sm:text-[28px] font-semibold text-[#1D1D1F] tracking-tight">
-          Today's Attendance
-        </h1>
-        <p className="text-sm font-medium text-[#86868B]">{simpleDate}</p>
+      <div className="space-y-2.5 mb-5">
+        <div>
+          <h1 className="text-2xl sm:text-[28px] font-semibold text-[#1D1D1F] tracking-tight">
+            Today's Attendance
+          </h1>
+          <p className="text-sm font-medium text-[#86868B] mt-0.5">
+            {formatReportHeaderDate(dateKey, session)}
+          </p>
+        </div>
+
+        {/* Quick Session Pill: Morning PT vs Evening Games */}
+        <div
+          className="bg-[#EBEBEF] p-0.5 rounded-xl inline-flex items-center self-start"
+          role="group"
+          aria-label="Active session"
+        >
+          <button
+            type="button"
+            onClick={() => onSessionChange('morning')}
+            className={`px-3 py-1 rounded-[10px] text-xs font-medium transition-all cursor-pointer ${
+              session === 'morning'
+                ? 'bg-white text-[#1D1D1F] font-semibold shadow-2xs'
+                : 'text-[#636366] hover:text-[#1D1D1F]'
+            }`}
+          >
+            Morning PT
+          </button>
+          <button
+            type="button"
+            onClick={() => onSessionChange('evening')}
+            className={`px-3 py-1 rounded-[10px] text-xs font-medium transition-all cursor-pointer ${
+              session === 'evening'
+                ? 'bg-white text-[#1D1D1F] font-semibold shadow-2xs'
+                : 'text-[#636366] hover:text-[#1D1D1F]'
+            }`}
+          >
+            Evening Games
+          </button>
+        </div>
       </div>
 
       {/* Compact Horizontal Summary */}

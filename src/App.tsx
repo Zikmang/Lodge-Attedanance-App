@@ -26,6 +26,8 @@ import {
   getPendingSyncQueue,
   removePendingSyncItem,
   getPendingSyncCount,
+  getCurrentSession,
+  SessionType,
 } from './services/storage';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { Header, SyncState } from './components/Header';
@@ -53,6 +55,7 @@ export default function App() {
   const [attendance, setAttendance] = useState<AttendanceMap>(() =>
     getCachedAttendance(getTodayKey())
   );
+  const [session, setSession] = useState<SessionType>(() => getCurrentSession());
 
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -478,6 +481,8 @@ export default function App() {
           <AttendanceView
             occupants={occupants}
             attendance={attendance}
+            session={session}
+            onSessionChange={setSession}
             isSyncing={syncState === 'syncing'}
             onUpdateStatus={handleUpdateStatus}
             onResetAllPresent={handleResetAllPresent}
@@ -509,6 +514,7 @@ export default function App() {
         dateKey={getTodayKey()}
         occupants={occupants}
         attendance={attendance}
+        initialSession={session}
         onClose={() => setIsReportOpen(false)}
         onShowToast={showToast}
       />
